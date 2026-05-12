@@ -67,6 +67,7 @@
 
 - `VECTOR_STORE`（`vectra` / `chroma`，默认 `vectra`）
 - `VECTRA_PATH`（默认 `.literag/vectra`）
+- `INDEX_FILE_CONCURRENCY`（默认 `4`，范围 `1-32`）
 - `KB_DOCUMENT_ROOT`（默认 `./document`）
 - `KB_TOOL_PREFIX`（默认 `kb`）
 - `MCP_TRANSPORT`（`stdio` / `streamable-http`）
@@ -76,6 +77,20 @@
 - `CHROMA_URL`（当 `VECTOR_STORE=chroma` 时生效，默认 `http://127.0.0.1:8000`）
 - `CHROMA_COLLECTION`（当 `VECTOR_STORE=chroma` 时生效，默认 `literag_markdown_kb`）
 - `SQLITE_PATH`（默认 `.literag/kb.sqlite`）
+
+## 性能建议（大文档集）
+
+- 默认索引已启用并发处理文件（`INDEX_FILE_CONCURRENCY=4`）。
+- 本地 Ollama 常见建议：
+  - CPU 偏弱机器先用 `2`
+  - CPU 偏强机器可尝试 `4~8`
+- 如果遇到 embedding 端速率瓶颈或不稳定，先下调并发。
+
+## 打包与 MCP 配置
+
+完整安装/打包/配置流程见：
+
+- [docs/PACKAGING_AND_MCP_SETUP.md](docs/PACKAGING_AND_MCP_SETUP.md)
 
 ## 运行
 

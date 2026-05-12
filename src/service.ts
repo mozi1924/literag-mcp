@@ -44,7 +44,10 @@ export class KnowledgeBaseService {
       this.sqlite,
       vectorStore,
       embeddingProvider,
-      this.config.chunking,
+      {
+        ...this.config.chunking,
+        fileConcurrency: this.config.indexing.fileConcurrency,
+      },
     );
     this.retriever = new HybridRetriever(embeddingProvider, vectorStore, this.sqlite);
   }

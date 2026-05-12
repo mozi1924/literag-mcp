@@ -21,6 +21,9 @@ export interface AppConfig {
   defaultSearchAlpha: number;
   defaultTopK: number;
   chunking: ChunkingOptions;
+  indexing: {
+    fileConcurrency: number;
+  };
   embedding: {
     baseUrl: string;
     apiKey: string;

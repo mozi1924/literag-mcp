@@ -16,14 +16,20 @@ import type { SqliteStore } from "../storage/sqlite.js";
 
 export class KnowledgeIndexer {
   private readonly chunker: MarkdownChunker;
+  private readonly fileConcurrency: number;
 
   constructor(
     private readonly sqlite: SqliteStore,
     private readonly vectorStore: VectorStore,
     private readonly embedding: EmbeddingProvider,
-    chunkOptions: { targetTokens: number; overlapTokens: number },
+    options: {
+      targetTokens: number;
+      overlapTokens: number;
+      fileConcurrency?: number;
+    },
   ) {
-    this.chunker = new MarkdownChunker(chunkOptions);
+    this.chunker = new MarkdownChunker(options);
+    this.fileConcurrency = Math.max(1, Math.floor(options.fileConcurrency ?? 1));
   }
 
   async run(rootPath: string, mode: IndexMode): Promise<IndexStats> {
@@ -47,7 +53,7 @@ export class KnowledgeIndexer {
     const existingDocPaths = new Set(this.sqlite.listDocumentPaths());
     const seenRelPaths = new Set<string>();
 
-    for (const absPath of markdownFiles) {
+    const processFile = async (absPath: string) => {
       const relPath = toPosixRelative(absRoot, absPath);
       seenRelPaths.add(relPath);
 
@@ -63,6 +69,26 @@ export class KnowledgeIndexer {
       } catch (error) {
         stats.errors.push(`${relPath}: ${String(error)}`);
       }
+    };
+
+    if (this.fileConcurrency <= 1 || markdownFiles.length <= 1) {
+      for (const absPath of markdownFiles) {
+        await processFile(absPath);
+      }
+    } else {
+      let cursor = 0;
+      const workerCount = Math.min(this.fileConcurrency, markdownFiles.length);
+      const workers = Array.from({ length: workerCount }, async () => {
+        while (true) {
+          const current = cursor;
+          cursor += 1;
+          if (current >= markdownFiles.length) {
+            break;
+          }
+          await processFile(markdownFiles[current]);
+        }
+      });
+      await Promise.all(workers);
     }
 
     for (const relPath of existingDocPaths) {

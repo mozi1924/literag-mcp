@@ -24,6 +24,11 @@ const FileConfigSchema = z.object({
       overlapTokens: z.number().int().min(0).optional(),
     })
     .optional(),
+  indexing: z
+    .object({
+      fileConcurrency: z.number().int().min(1).max(32).optional(),
+    })
+    .optional(),
   embedding: z
     .object({
       baseUrl: z.string().optional(),
@@ -99,6 +104,12 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
   if (vectorStore !== "vectra" && vectorStore !== "chroma") {
     throw new Error("Invalid vector store. Set VECTOR_STORE to 'vectra' or 'chroma'");
   }
+  const fileConcurrencyRaw = Number(
+    process.env.INDEX_FILE_CONCURRENCY ?? fileConfig.indexing?.fileConcurrency ?? 4,
+  );
+  const fileConcurrency = Number.isFinite(fileConcurrencyRaw)
+    ? Math.max(1, Math.min(32, Math.floor(fileConcurrencyRaw)))
+    : 4;
 
   return {
     vectorStore,
@@ -128,6 +139,9 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
       overlapTokens: Number(
         process.env.CHUNK_OVERLAP_TOKENS ?? fileConfig.chunking?.overlapTokens ?? 120,
       ),
+    },
+    indexing: {
+      fileConcurrency,
     },
     embedding: {
       baseUrl: embeddingBaseUrl,

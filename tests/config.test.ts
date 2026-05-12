@@ -15,6 +15,9 @@ test("environment variables override config file values", async () => {
       {
         vectorStore: "chroma",
         vectraPath: "./file-vectra",
+        indexing: {
+          fileConcurrency: 2,
+        },
         embedding: {
           baseUrl: "https://file.example/v1",
           apiKey: "file-key",
@@ -32,10 +35,12 @@ test("environment variables override config file values", async () => {
   process.env.EMBEDDING_MODEL = "env-model";
   process.env.VECTOR_STORE = "vectra";
   process.env.VECTRA_PATH = "./env-vectra";
+  process.env.INDEX_FILE_CONCURRENCY = "7";
 
   const config = loadConfig(tempRoot);
   assert.equal(config.vectorStore, "vectra");
   assert.equal(config.vectraPath, path.resolve(tempRoot, "env-vectra"));
+  assert.equal(config.indexing.fileConcurrency, 7);
   assert.equal(config.embedding.baseUrl, "https://env.example/v1");
   assert.equal(config.embedding.apiKey, "env-key");
   assert.equal(config.embedding.model, "env-model");
@@ -46,4 +51,5 @@ test("environment variables override config file values", async () => {
   delete process.env.EMBEDDING_MODEL;
   delete process.env.VECTOR_STORE;
   delete process.env.VECTRA_PATH;
+  delete process.env.INDEX_FILE_CONCURRENCY;
 });

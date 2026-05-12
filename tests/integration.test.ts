@@ -35,6 +35,7 @@ Troubleshooting section.`,
   const indexer = new KnowledgeIndexer(sqlite, vectorStore, embedding, {
     targetTokens: 50,
     overlapTokens: 12,
+    fileConcurrency: 2,
   });
   const retriever = new HybridRetriever(embedding, vectorStore, sqlite);
 

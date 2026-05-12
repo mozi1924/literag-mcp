@@ -17,6 +17,9 @@
     "targetTokens": 1000,
     "overlapTokens": 120
   },
+  "indexing": {
+    "fileConcurrency": 4
+  },
   "embedding": {
     "baseUrl": "https://your-openai-compatible-endpoint/v1",
     "apiKey": "YOUR_API_KEY",
