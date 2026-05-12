@@ -4,6 +4,8 @@ import { z } from "zod";
 import type { AppConfig } from "../types.js";
 
 const FileConfigSchema = z.object({
+  vectorStore: z.enum(["vectra", "chroma"]).optional(),
+  vectraPath: z.string().optional(),
   chromaUrl: z.string().optional(),
   chromaCollection: z.string().optional(),
   sqlitePath: z.string().optional(),
@@ -90,7 +92,20 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
     fileConfig.transport ??
     "stdio";
 
+  const vectorStore =
+    (process.env.VECTOR_STORE as AppConfig["vectorStore"] | undefined) ??
+    fileConfig.vectorStore ??
+    "vectra";
+  if (vectorStore !== "vectra" && vectorStore !== "chroma") {
+    throw new Error("Invalid vector store. Set VECTOR_STORE to 'vectra' or 'chroma'");
+  }
+
   return {
+    vectorStore,
+    vectraPath: path.resolve(
+      cwd,
+      process.env.VECTRA_PATH ?? fileConfig.vectraPath ?? path.join(".literag", "vectra"),
+    ),
     chromaUrl: process.env.CHROMA_URL ?? fileConfig.chromaUrl ?? "http://127.0.0.1:8000",
     chromaCollection:
       process.env.CHROMA_COLLECTION ?? fileConfig.chromaCollection ?? "literag_markdown_kb",

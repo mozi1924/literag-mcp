@@ -6,6 +6,8 @@ export interface ChunkingOptions {
 }
 
 export interface AppConfig {
+  vectorStore: "vectra" | "chroma";
+  vectraPath: string;
   chromaUrl: string;
   chromaCollection: string;
   sqlitePath: string;

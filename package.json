@@ -30,6 +30,7 @@
     "chromadb": "^3.4.3",
     "express": "^5.1.0",
     "minimatch": "^10.2.5",
+    "vectra": "^0.14.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

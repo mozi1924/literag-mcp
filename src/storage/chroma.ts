@@ -9,13 +9,19 @@ export class ChromaVectorStore implements VectorStore {
     private readonly baseUrl: string,
     private readonly collectionName: string,
   ) {
-    this.client = new ChromaClient({ path: baseUrl });
+    const url = new URL(baseUrl);
+    this.client = new ChromaClient({
+      ssl: url.protocol === "https:",
+      host: url.hostname,
+      port: Number(url.port || (url.protocol === "https:" ? 443 : 80)),
+    });
   }
 
   private async getCollection() {
     if (!this.collectionPromise) {
       this.collectionPromise = this.client.getOrCreateCollection({
         name: this.collectionName,
+        embeddingFunction: null,
         metadata: { purpose: "literag-markdown-kb" },
       });
     }

@@ -1,4 +1,6 @@
 {
+  "vectorStore": "vectra",
+  "vectraPath": ".literag/vectra",
   "chromaUrl": "http://127.0.0.1:8000",
   "chromaCollection": "literag_markdown_kb",
   "sqlitePath": ".literag/kb.sqlite",

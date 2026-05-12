@@ -186,19 +186,44 @@ export class SqliteStore {
       return scoreMap;
     }
 
+    const safeQuery = this.normalizeFtsQuery(query);
+    if (!safeQuery) {
+      return scoreMap;
+    }
+
     const placeholders = chunkIds.map(() => "?").join(", ");
-    const rows = this.db
-      .prepare(
-        `SELECT chunk_id, bm25(fts_chunks) AS rank
-         FROM fts_chunks
-         WHERE fts_chunks MATCH ? AND chunk_id IN (${placeholders})`,
-      )
-      .all(query, ...chunkIds) as Array<{ chunk_id: string; rank: number }>;
+    let rows: Array<{ chunk_id: string; rank: number }> = [];
+    try {
+      rows = this.db
+        .prepare(
+          `SELECT chunk_id, bm25(fts_chunks) AS rank
+           FROM fts_chunks
+           WHERE fts_chunks MATCH ? AND chunk_id IN (${placeholders})`,
+        )
+        .all(safeQuery, ...chunkIds) as Array<{ chunk_id: string; rank: number }>;
+    } catch (error) {
+      // Avoid hard-failing semantic search when FTS parser rejects a query.
+      console.warn("fts5 query parse failed:", error);
+      return scoreMap;
+    }
 
     for (const row of rows) {
       scoreMap.set(row.chunk_id, Number(row.rank));
     }
     return scoreMap;
+  }
+
+  private normalizeFtsQuery(query: string): string {
+    const tokens = query
+      .split(/\s+/)
+      .map(token => token.replace(/[^\p{L}\p{N}_]+/gu, ""))
+      .filter(Boolean);
+
+    if (tokens.length === 0) {
+      return "";
+    }
+
+    return tokens.map(token => `"${token.replace(/"/g, "\"\"")}"`).join(" ");
   }
 
   getChunkMetadata(chunkIds: string[]): Map<string, ChunkMetaRow> {

@@ -51,6 +51,13 @@ Troubleshooting section.`,
   assert.equal(search.results[0].rel_path, "guide.md");
   assert.ok(search.results[0].start_line >= 1);
 
+  const searchWithPunctuation = await retriever.search({
+    query: "install package?",
+    topK: 3,
+    alpha: 0.7,
+  });
+  assert.ok(searchWithPunctuation.results.length >= 1);
+
   const doc = sqlite.getDocument("guide.md");
   assert.ok(doc);
   assert.equal(doc!.lineCount > 0, true);

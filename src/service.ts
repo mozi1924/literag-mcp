@@ -6,6 +6,7 @@ import { KnowledgeIndexer } from "./indexing/indexer.js";
 import { HybridRetriever } from "./retrieval/hybrid.js";
 import { ChromaVectorStore } from "./storage/chroma.js";
 import { SqliteStore } from "./storage/sqlite.js";
+import { VectraVectorStore } from "./storage/vectra.js";
 import type { AppConfig, IndexMode, IndexStats, SearchResponse } from "./types.js";
 import { clamp } from "./utils/text.js";
 
@@ -34,7 +35,10 @@ export class KnowledgeBaseService {
       this.config.embedding.model,
       this.config.embedding.dimensions,
     );
-    const vectorStore = new ChromaVectorStore(this.config.chromaUrl, this.config.chromaCollection);
+    const vectorStore =
+      this.config.vectorStore === "chroma"
+        ? new ChromaVectorStore(this.config.chromaUrl, this.config.chromaCollection)
+        : new VectraVectorStore(this.config.vectraPath);
 
     this.indexer = new KnowledgeIndexer(
       this.sqlite,
