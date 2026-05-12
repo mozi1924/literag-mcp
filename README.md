@@ -29,6 +29,20 @@
 
 可通过 `KB_DOCUMENT_ROOT`（或 `config.json` 的 `knowledgeBaseDir`）覆盖。
 
+## 固定工作目录（推荐在 stdio/agent 场景开启）
+
+为避免 `process.cwd()` 被调用方工作区影响，可显式指定“路径解析基准目录”（绝对路径）：
+
+- 环境变量：`LITERAG_WORKSPACE_ROOT=/ABS/PATH/literag-mcp`
+- 配置文件：`"workspaceRoot": "/ABS/PATH/literag-mcp"`
+
+启用后，以下默认路径都基于该目录解析：
+
+- `config.json`（当未设置 `LITERAG_CONFIG_PATH` 时）
+- `VECTRA_PATH`
+- `SQLITE_PATH`
+- `KB_DOCUMENT_ROOT`
+
 ## 工具名前缀
 
 工具名前缀支持自定义，例如设置：
@@ -66,8 +80,11 @@
 ### 常用可选
 
 - `VECTOR_STORE`（`vectra` / `chroma`，默认 `vectra`）
+- `LITERAG_WORKSPACE_ROOT`（绝对路径，固定路径解析基准目录）
 - `VECTRA_PATH`（默认 `.literag/vectra`）
 - `INDEX_FILE_CONCURRENCY`（默认 `4`，范围 `1-32`）
+- `EMBEDDING_BATCH_MAX_TEXTS`（默认 `64`，范围 `1-512`）
+- `EMBEDDING_BATCH_CONCURRENCY`（默认 `2`，范围 `1-32`）
 - `KB_DOCUMENT_ROOT`（默认 `./document`）
 - `KB_TOOL_PREFIX`（默认 `kb`）
 - `MCP_TRANSPORT`（`stdio` / `streamable-http`）
@@ -81,10 +98,15 @@
 ## 性能建议（大文档集）
 
 - 默认索引已启用并发处理文件（`INDEX_FILE_CONCURRENCY=4`）。
+- Embedding 请求会自动做批处理（将并发小请求合并成少量大请求）。
 - 本地 Ollama 常见建议：
   - CPU 偏弱机器先用 `2`
   - CPU 偏强机器可尝试 `4~8`
 - 如果遇到 embedding 端速率瓶颈或不稳定，先下调并发。
+- 对“文件很多、每个文件较小”的文档集（例如 Blender API 参考）建议：
+  - `INDEX_FILE_CONCURRENCY=4`
+  - `EMBEDDING_BATCH_MAX_TEXTS=96`
+  - `EMBEDDING_BATCH_CONCURRENCY=2`
 
 ## 打包与 MCP 配置
 
@@ -105,6 +127,7 @@ npm install
 ```bash
 npm run dev:stdio
 npm run dev:http
+npm run dev:index -- --root /ABS/PATH/docs --mode incremental
 ```
 
 构建与运行：
@@ -113,7 +136,14 @@ npm run dev:http
 npm run build
 npm run start:stdio
 npm run start:http
+npm run start:index -- --root /ABS/PATH/docs --mode incremental
 ```
+
+手动索引 CLI（绕开 MCP 120 秒超时）会每秒输出：
+
+- 当前秒处理速率：`chunk/s`
+- Chunk 进度：`processed/total`（`total` 来自预估；可 `--no-total-chunks` 关闭）
+- 文件进度与耗时
 
 测试：
 

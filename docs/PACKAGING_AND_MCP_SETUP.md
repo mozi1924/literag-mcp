@@ -41,8 +41,11 @@ cp -R /Users/you/your_markdown_docs/* document/
 
 常用推荐：
 
+- `LITERAG_WORKSPACE_ROOT=/ABS/PATH/literag-mcp`（绝对路径，固定真实工作目录）
 - `VECTOR_STORE=vectra`（默认值）
 - `INDEX_FILE_CONCURRENCY=4`（大文档集可提速，建议 `2~8`）
+- `EMBEDDING_BATCH_MAX_TEXTS=64`（建议 `64~128`）
+- `EMBEDDING_BATCH_CONCURRENCY=2`（建议 `1~3`）
 - `KB_TOOL_PREFIX=bpy`（工具名会变成 `bpy_index`/`bpy_search`/`bpy_get_document`）
 
 本地 Ollama 例子：
@@ -51,8 +54,11 @@ cp -R /Users/you/your_markdown_docs/* document/
 EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1 \
 EMBEDDING_API_KEY=ollama \
 EMBEDDING_MODEL=bge-m3:latest \
+LITERAG_WORKSPACE_ROOT=/ABS/PATH/literag-mcp \
 VECTOR_STORE=vectra \
 INDEX_FILE_CONCURRENCY=4 \
+EMBEDDING_BATCH_MAX_TEXTS=96 \
+EMBEDDING_BATCH_CONCURRENCY=2 \
 KB_TOOL_PREFIX=bpy \
 MCP_TRANSPORT=stdio \
 node dist/server.js
@@ -97,8 +103,11 @@ args = ["/ABS/PATH/literag-mcp/dist/server.js"]
 EMBEDDING_BASE_URL = "http://127.0.0.1:11434/v1"
 EMBEDDING_API_KEY = "ollama"
 EMBEDDING_MODEL = "bge-m3:latest"
+LITERAG_WORKSPACE_ROOT = "/ABS/PATH/literag-mcp"
 VECTOR_STORE = "vectra"
 INDEX_FILE_CONCURRENCY = "4"
+EMBEDDING_BATCH_MAX_TEXTS = "96"
+EMBEDDING_BATCH_CONCURRENCY = "2"
 KB_DOCUMENT_ROOT = "/ABS/PATH/literag-mcp/document"
 KB_TOOL_PREFIX = "bpy"
 MCP_TRANSPORT = "stdio"
@@ -119,8 +128,11 @@ claude mcp add-json literag-bpy '{
     "EMBEDDING_BASE_URL": "http://127.0.0.1:11434/v1",
     "EMBEDDING_API_KEY": "ollama",
     "EMBEDDING_MODEL": "bge-m3:latest",
+    "LITERAG_WORKSPACE_ROOT": "/ABS/PATH/literag-mcp",
     "VECTOR_STORE": "vectra",
     "INDEX_FILE_CONCURRENCY": "4",
+    "EMBEDDING_BATCH_MAX_TEXTS": "96",
+    "EMBEDDING_BATCH_CONCURRENCY": "2",
     "KB_DOCUMENT_ROOT": "/ABS/PATH/literag-mcp/document",
     "KB_TOOL_PREFIX": "bpy",
     "MCP_TRANSPORT": "stdio"
@@ -134,10 +146,29 @@ claude mcp add-json literag-bpy '{
 - 首次索引成功（大文档集首次耗时较长属正常）
 - `bpy_search` 能命中文档并返回 `rel_path` 与片段
 
+如果文档库很大且客户端有 MCP 调用超时限制，可改用手动索引 CLI：
+
+```bash
+npm run build
+EMBEDDING_BASE_URL=http://127.0.0.1:11434/v1 \
+EMBEDDING_API_KEY=ollama \
+EMBEDDING_MODEL=bge-m3:latest \
+LITERAG_WORKSPACE_ROOT=/ABS/PATH/literag-mcp \
+VECTOR_STORE=vectra \
+INDEX_FILE_CONCURRENCY=4 \
+EMBEDDING_BATCH_MAX_TEXTS=96 \
+EMBEDDING_BATCH_CONCURRENCY=2 \
+npm run start:index -- --root /ABS/PATH/blender_python_reference --mode incremental
+```
+
+CLI 会每秒显示 `chunk/s`、`chunks processed/total`、文件进度和耗时。
+
 ## 9. 常见问题
 
 - 索引很慢：
   - 优先调 `INDEX_FILE_CONCURRENCY`（`2~8` 试探）
+  - 调 `EMBEDDING_BATCH_MAX_TEXTS`（`64~128`）减少小请求数量
+  - 调 `EMBEDDING_BATCH_CONCURRENCY`（`1~3`）匹配 embedding 服务吞吐
   - 确认 embedding 服务本身吞吐（Ollama 机型差异大）
 - 更换向量后端到 Chroma：
   - 设置 `VECTOR_STORE=chroma`

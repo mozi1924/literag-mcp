@@ -9,9 +9,11 @@
     "dev": "MCP_TRANSPORT=stdio tsx src/server.ts",
     "dev:stdio": "MCP_TRANSPORT=stdio tsx src/server.ts",
     "dev:http": "MCP_TRANSPORT=streamable-http tsx src/server.ts",
+    "dev:index": "tsx src/manualIndex.ts",
     "start": "MCP_TRANSPORT=stdio node dist/server.js",
     "start:stdio": "MCP_TRANSPORT=stdio node dist/server.js",
     "start:http": "MCP_TRANSPORT=streamable-http node dist/server.js",
+    "start:index": "node dist/manualIndex.js",
     "test": "tsx --test tests/**/*.test.ts"
   },
   "keywords": [

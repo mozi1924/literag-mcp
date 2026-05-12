@@ -22,6 +22,7 @@ async function runStdio(): Promise<void> {
   console.error(
     `MCP server started (stdio). tools: ${config.toolPrefix}_index, ${config.toolPrefix}_search, ${config.toolPrefix}_get_document`,
   );
+  console.error(`workspace root: ${config.workspaceRoot}`);
 }
 
 async function runStreamableHttp(): Promise<void> {
@@ -84,6 +85,7 @@ async function runStreamableHttp(): Promise<void> {
     console.error(
       `tools: ${config.toolPrefix}_index, ${config.toolPrefix}_search, ${config.toolPrefix}_get_document`,
     );
+    console.error(`workspace root: ${config.workspaceRoot}`);
   });
 }
 

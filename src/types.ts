@@ -6,6 +6,7 @@ export interface ChunkingOptions {
 }
 
 export interface AppConfig {
+  workspaceRoot: string;
   vectorStore: "vectra" | "chroma";
   vectraPath: string;
   chromaUrl: string;
@@ -29,6 +30,8 @@ export interface AppConfig {
     apiKey: string;
     model: string;
     dimensions?: number;
+    batchMaxTexts: number;
+    batchConcurrency: number;
   };
 }
 
@@ -66,6 +69,19 @@ export interface IndexStats {
   durationMs: number;
   watchStarted: boolean;
   errors: string[];
+}
+
+export interface IndexProgress {
+  processedFiles: number;
+  totalFiles: number;
+  processedChunks: number;
+  totalChunks: number | null;
+  chunksPerSecond: number;
+  elapsedMs: number;
+  added: number;
+  updated: number;
+  skipped: number;
+  errors: number;
 }
 
 export interface VectorSearchResult {

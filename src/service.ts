@@ -1,18 +1,25 @@
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import { loadConfig } from "./config/index.js";
+import { BatchedEmbeddingProvider } from "./embedding/batched.js";
 import { OpenAICompatibleEmbeddingProvider } from "./embedding/openaiCompatible.js";
 import { KnowledgeIndexer } from "./indexing/indexer.js";
 import { HybridRetriever } from "./retrieval/hybrid.js";
 import { ChromaVectorStore } from "./storage/chroma.js";
 import { SqliteStore } from "./storage/sqlite.js";
 import { VectraVectorStore } from "./storage/vectra.js";
-import type { AppConfig, IndexMode, IndexStats, SearchResponse } from "./types.js";
+import type { AppConfig, IndexMode, IndexProgress, IndexStats, SearchResponse } from "./types.js";
 import { clamp } from "./utils/text.js";
 
 interface WatchState {
   rootPath: string;
   watcher: FSWatcher;
+}
+
+function isIgnoredWatchPath(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+  return segments.some(segment => segment.startsWith(".") || segment === "__MACOSX");
 }
 
 export class KnowledgeBaseService {
@@ -29,12 +36,16 @@ export class KnowledgeBaseService {
     this.config = loadConfig(cwd);
     this.sqlite = new SqliteStore(this.config.sqlitePath);
 
-    const embeddingProvider = new OpenAICompatibleEmbeddingProvider(
+    const rawEmbeddingProvider = new OpenAICompatibleEmbeddingProvider(
       this.config.embedding.baseUrl,
       this.config.embedding.apiKey,
       this.config.embedding.model,
       this.config.embedding.dimensions,
     );
+    const embeddingProvider = new BatchedEmbeddingProvider(rawEmbeddingProvider, {
+      maxBatchTexts: this.config.embedding.batchMaxTexts,
+      maxConcurrency: this.config.embedding.batchConcurrency,
+    });
     const vectorStore =
       this.config.vectorStore === "chroma"
         ? new ChromaVectorStore(this.config.chromaUrl, this.config.chromaCollection)
@@ -47,6 +58,9 @@ export class KnowledgeBaseService {
       {
         ...this.config.chunking,
         fileConcurrency: this.config.indexing.fileConcurrency,
+        onProgress: progress => {
+          this.logIndexProgress(progress);
+        },
       },
     );
     this.retriever = new HybridRetriever(embeddingProvider, vectorStore, this.sqlite);
@@ -175,6 +189,7 @@ export class KnowledgeBaseService {
     const watcher = chokidar.watch(pattern, {
       persistent: true,
       ignoreInitial: true,
+      ignored: isIgnoredWatchPath,
       awaitWriteFinish: {
         stabilityThreshold: 300,
         pollInterval: 50,
@@ -217,5 +232,22 @@ export class KnowledgeBaseService {
     }
     await this.watchState.watcher.close();
     this.watchState = null;
+  }
+
+  private logIndexProgress(progress: IndexProgress): void {
+    if (progress.totalFiles <= 0) {
+      return;
+    }
+    const isLast = progress.processedFiles === progress.totalFiles;
+    const shouldReport =
+      isLast ||
+      progress.processedFiles % Math.max(25, Math.floor(progress.totalFiles / 20)) === 0;
+    if (!shouldReport) {
+      return;
+    }
+    const pct = ((progress.processedFiles / progress.totalFiles) * 100).toFixed(1);
+    console.error(
+      `[index] progress ${progress.processedFiles}/${progress.totalFiles} (${pct}%) | chunks=${progress.processedChunks} cps=${progress.chunksPerSecond.toFixed(1)} added=${progress.added} updated=${progress.updated} skipped=${progress.skipped} errors=${progress.errors} elapsed=${Math.round(progress.elapsedMs / 1000)}s`,
+    );
   }
 }

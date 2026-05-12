@@ -1,4 +1,5 @@
 {
+  "workspaceRoot": "/ABS/PATH/literag-mcp",
   "vectorStore": "vectra",
   "vectraPath": ".literag/vectra",
   "chromaUrl": "http://127.0.0.1:8000",
@@ -24,6 +25,8 @@
     "baseUrl": "https://your-openai-compatible-endpoint/v1",
     "apiKey": "YOUR_API_KEY",
     "model": "text-embedding-3-large",
-    "dimensions": 1024
+    "dimensions": 1024,
+    "batchMaxTexts": 64,
+    "batchConcurrency": 2
   }
 }

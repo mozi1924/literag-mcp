@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { AppConfig } from "../types.js";
 
 const FileConfigSchema = z.object({
+  workspaceRoot: z.string().optional(),
   vectorStore: z.enum(["vectra", "chroma"]).optional(),
   vectraPath: z.string().optional(),
   chromaUrl: z.string().optional(),
@@ -35,6 +36,8 @@ const FileConfigSchema = z.object({
       apiKey: z.string().optional(),
       model: z.string().optional(),
       dimensions: z.number().int().positive().optional(),
+      batchMaxTexts: z.number().int().min(1).max(512).optional(),
+      batchConcurrency: z.number().int().min(1).max(32).optional(),
     })
     .optional(),
 });
@@ -62,9 +65,27 @@ function normalizeHttpPath(value: string): string {
   return pathValue.startsWith("/") ? pathValue : `/${pathValue}`;
 }
 
+function requireAbsolutePath(pathValue: string, fieldName: string): string {
+  if (!path.isAbsolute(pathValue)) {
+    throw new Error(`${fieldName} must be an absolute path: ${pathValue}`);
+  }
+  return path.resolve(pathValue);
+}
+
 export function loadConfig(cwd = process.cwd()): AppConfig {
-  const configPath = process.env.LITERAG_CONFIG_PATH ?? path.join(cwd, "config.json");
+  const envWorkspaceRootRaw = process.env.LITERAG_WORKSPACE_ROOT?.trim();
+  const envWorkspaceRoot = envWorkspaceRootRaw
+    ? requireAbsolutePath(envWorkspaceRootRaw, "LITERAG_WORKSPACE_ROOT")
+    : undefined;
+  const configPath = process.env.LITERAG_CONFIG_PATH
+    ? path.resolve(cwd, process.env.LITERAG_CONFIG_PATH)
+    : path.join(envWorkspaceRoot ?? cwd, "config.json");
   const fileConfig = readJsonConfig(configPath);
+  const fileWorkspaceRootRaw = fileConfig.workspaceRoot?.trim();
+  const fileWorkspaceRoot = fileWorkspaceRootRaw
+    ? requireAbsolutePath(fileWorkspaceRootRaw, "config.workspaceRoot")
+    : undefined;
+  const workspaceRoot = envWorkspaceRoot ?? fileWorkspaceRoot ?? path.resolve(cwd);
 
   const embeddingBaseUrl =
     process.env.EMBEDDING_BASE_URL ?? fileConfig.embedding?.baseUrl ?? "";
@@ -85,11 +106,14 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
     process.env.KB_TOOL_PREFIX ?? fileConfig.toolPrefix ?? "kb",
   );
 
-  const sqlitePath =
-    process.env.SQLITE_PATH ?? fileConfig.sqlitePath ?? path.join(cwd, ".literag", "kb.sqlite");
+  const sqlitePath = path.resolve(
+    workspaceRoot,
+    process.env.SQLITE_PATH ?? fileConfig.sqlitePath ?? path.join(".literag", "kb.sqlite"),
+  );
 
   const knowledgeBaseDir = path.resolve(
-    process.env.KB_DOCUMENT_ROOT ?? fileConfig.knowledgeBaseDir ?? path.join(cwd, "document"),
+    workspaceRoot,
+    process.env.KB_DOCUMENT_ROOT ?? fileConfig.knowledgeBaseDir ?? "document",
   );
 
   const transport =
@@ -110,11 +134,24 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
   const fileConcurrency = Number.isFinite(fileConcurrencyRaw)
     ? Math.max(1, Math.min(32, Math.floor(fileConcurrencyRaw)))
     : 4;
+  const batchMaxTextsRaw = Number(
+    process.env.EMBEDDING_BATCH_MAX_TEXTS ?? fileConfig.embedding?.batchMaxTexts ?? 64,
+  );
+  const batchMaxTexts = Number.isFinite(batchMaxTextsRaw)
+    ? Math.max(1, Math.min(512, Math.floor(batchMaxTextsRaw)))
+    : 64;
+  const batchConcurrencyRaw = Number(
+    process.env.EMBEDDING_BATCH_CONCURRENCY ?? fileConfig.embedding?.batchConcurrency ?? 2,
+  );
+  const batchConcurrency = Number.isFinite(batchConcurrencyRaw)
+    ? Math.max(1, Math.min(32, Math.floor(batchConcurrencyRaw)))
+    : 2;
 
   return {
+    workspaceRoot,
     vectorStore,
     vectraPath: path.resolve(
-      cwd,
+      workspaceRoot,
       process.env.VECTRA_PATH ?? fileConfig.vectraPath ?? path.join(".literag", "vectra"),
     ),
     chromaUrl: process.env.CHROMA_URL ?? fileConfig.chromaUrl ?? "http://127.0.0.1:8000",
@@ -150,6 +187,8 @@ export function loadConfig(cwd = process.cwd()): AppConfig {
       dimensions: Number(
         process.env.EMBEDDING_DIMENSIONS ?? fileConfig.embedding?.dimensions ?? 0,
       ) || undefined,
+      batchMaxTexts,
+      batchConcurrency,
     },
   };
 }

@@ -5,6 +5,7 @@ import type {
   ChunkRecord,
   DocumentRecord,
   EmbeddingProvider,
+  IndexProgress,
   IndexMode,
   IndexStats,
   MarkdownChunk,
@@ -17,6 +18,8 @@ import type { SqliteStore } from "../storage/sqlite.js";
 export class KnowledgeIndexer {
   private readonly chunker: MarkdownChunker;
   private readonly fileConcurrency: number;
+  private readonly reportProgress: ((progress: IndexProgress) => void) | null;
+  private readonly estimateTotalChunks: boolean;
 
   constructor(
     private readonly sqlite: SqliteStore,
@@ -26,10 +29,14 @@ export class KnowledgeIndexer {
       targetTokens: number;
       overlapTokens: number;
       fileConcurrency?: number;
+      onProgress?: (progress: IndexProgress) => void;
+      estimateTotalChunks?: boolean;
     },
   ) {
     this.chunker = new MarkdownChunker(options);
     this.fileConcurrency = Math.max(1, Math.floor(options.fileConcurrency ?? 1));
+    this.reportProgress = options.onProgress ?? null;
+    this.estimateTotalChunks = options.estimateTotalChunks ?? false;
   }
 
   async run(rootPath: string, mode: IndexMode): Promise<IndexStats> {
@@ -49,25 +56,42 @@ export class KnowledgeIndexer {
 
     const absRoot = path.resolve(rootPath);
     const markdownFiles = await collectMarkdownFiles(absRoot);
+    const totalChunks = this.estimateTotalChunks
+      ? await this.countTotalChunks(absRoot, markdownFiles)
+      : null;
 
     const existingDocPaths = new Set(this.sqlite.listDocumentPaths());
     const seenRelPaths = new Set<string>();
+    const totalFiles = markdownFiles.length;
+    let processedFiles = 0;
+    let processedChunks = 0;
 
     const processFile = async (absPath: string) => {
       const relPath = toPosixRelative(absRoot, absPath);
       seenRelPaths.add(relPath);
 
       try {
-        const status = await this.upsertFile(absRoot, absPath, mode === "full");
-        if (status === "added") {
+        const result = await this.upsertFile(absRoot, absPath, mode === "full");
+        if (result.status === "added") {
           stats.added += 1;
-        } else if (status === "updated") {
+        } else if (result.status === "updated") {
           stats.updated += 1;
         } else {
           stats.skipped += 1;
         }
+        processedChunks += result.processedChunkCount;
       } catch (error) {
         stats.errors.push(`${relPath}: ${String(error)}`);
+      } finally {
+        processedFiles += 1;
+        this.emitProgress({
+          processedFiles,
+          totalFiles,
+          processedChunks,
+          totalChunks,
+          stats,
+          startMs: start,
+        });
       }
     };
 
@@ -112,8 +136,36 @@ export class KnowledgeIndexer {
     return stats;
   }
 
+  private emitProgress(args: {
+    processedFiles: number;
+    totalFiles: number;
+    processedChunks: number;
+    totalChunks: number | null;
+    stats: IndexStats;
+    startMs: number;
+  }): void {
+    if (!this.reportProgress) {
+      return;
+    }
+    const elapsedMs = Date.now() - args.startMs;
+    const chunksPerSecond = elapsedMs <= 0 ? 0 : args.processedChunks / (elapsedMs / 1000);
+    this.reportProgress({
+      processedFiles: args.processedFiles,
+      totalFiles: args.totalFiles,
+      processedChunks: args.processedChunks,
+      totalChunks: args.totalChunks,
+      chunksPerSecond,
+      elapsedMs,
+      added: args.stats.added,
+      updated: args.stats.updated,
+      skipped: args.stats.skipped,
+      errors: args.stats.errors.length,
+    });
+  }
+
   async indexOne(rootPath: string, absPath: string): Promise<"added" | "updated" | "skipped"> {
-    return this.upsertFile(path.resolve(rootPath), absPath, false);
+    const result = await this.upsertFile(path.resolve(rootPath), absPath, false);
+    return result.status;
   }
 
   async removeOne(rootPath: string, absPath: string): Promise<boolean> {
@@ -131,7 +183,7 @@ export class KnowledgeIndexer {
     rootPath: string,
     absPath: string,
     forceReindex: boolean,
-  ): Promise<"added" | "updated" | "skipped"> {
+  ): Promise<{ status: "added" | "updated" | "skipped"; processedChunkCount: number }> {
     const resolvedPath = path.resolve(absPath);
     const relPath = toPosixRelative(rootPath, resolvedPath);
 
@@ -144,7 +196,10 @@ export class KnowledgeIndexer {
     const existing = this.sqlite.getDocument(relPath);
 
     if (!forceReindex && existing && existing.contentHash === hash) {
-      return "skipped";
+      return {
+        status: "skipped",
+        processedChunkCount: 0,
+      };
     }
 
     const chunks = this.chunker.chunkDocument(relPath, content);
@@ -174,8 +229,29 @@ export class KnowledgeIndexer {
     this.sqlite.upsertDocumentWithChunks(document, chunkRecords);
 
     if (!existing) {
-      return "added";
+      return {
+        status: "added",
+        processedChunkCount: chunks.length,
+      };
     }
-    return "updated";
+    return {
+      status: "updated",
+      processedChunkCount: chunks.length,
+    };
+  }
+
+  private async countTotalChunks(absRoot: string, markdownFiles: string[]): Promise<number> {
+    let total = 0;
+    for (const absPath of markdownFiles) {
+      const resolvedPath = path.resolve(absPath);
+      const relPath = toPosixRelative(absRoot, resolvedPath);
+      try {
+        const content = await fs.readFile(resolvedPath, "utf8");
+        total += this.chunker.chunkDocument(relPath, content).length;
+      } catch {
+        // Skip chunk-estimation errors; real indexing will report file-level errors.
+      }
+    }
+    return total;
   }
 }
