@@ -1,0 +1,41 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import { loadConfig } from "../src/config/index.js";
+
+test("environment variables override config file values", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "literag-config-"));
+  const configPath = path.join(tempRoot, "config.json");
+
+  await fs.writeFile(
+    configPath,
+    JSON.stringify(
+      {
+        embedding: {
+          baseUrl: "https://file.example/v1",
+          apiKey: "file-key",
+          model: "file-model",
+        },
+      },
+      null,
+      2,
+    ),
+  );
+
+  process.env.LITERAG_CONFIG_PATH = configPath;
+  process.env.EMBEDDING_BASE_URL = "https://env.example/v1";
+  process.env.EMBEDDING_API_KEY = "env-key";
+  process.env.EMBEDDING_MODEL = "env-model";
+
+  const config = loadConfig(tempRoot);
+  assert.equal(config.embedding.baseUrl, "https://env.example/v1");
+  assert.equal(config.embedding.apiKey, "env-key");
+  assert.equal(config.embedding.model, "env-model");
+
+  delete process.env.LITERAG_CONFIG_PATH;
+  delete process.env.EMBEDDING_BASE_URL;
+  delete process.env.EMBEDDING_API_KEY;
+  delete process.env.EMBEDDING_MODEL;
+});

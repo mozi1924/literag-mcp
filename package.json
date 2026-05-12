@@ -1,0 +1,36 @@
+{
+  "name": "literag-mcp",
+  "version": "0.1.0",
+  "description": "Markdown knowledge-base MCP server with Chroma + SQLite hybrid retrieval",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js",
+    "test": "tsx --test tests/**/*.test.ts"
+  },
+  "keywords": [
+    "mcp",
+    "markdown",
+    "chromadb",
+    "sqlite",
+    "retrieval"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.9.0",
+    "chokidar": "^5.0.0",
+    "chromadb": "^3.4.3",
+    "minimatch": "^10.2.5",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
