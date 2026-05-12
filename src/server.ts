@@ -1,108 +1,98 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import * as z from "zod/v4";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createKnowledgeMcpServer } from "./mcpServerFactory.js";
 import { KnowledgeBaseService } from "./service.js";
 
 const kb = new KnowledgeBaseService(process.cwd());
+const config = kb.getConfig();
 
-const server = new McpServer({
-  name: "literag-markdown-kb",
-  version: "0.1.0",
-});
+function createServerInstance() {
+  return createKnowledgeMcpServer(kb, {
+    name: config.serverName,
+    version: "0.2.0",
+    toolPrefix: config.toolPrefix,
+  });
+}
 
-server.registerTool(
-  "kb_index",
-  {
-    description:
-      "Index markdown documents into Chroma + SQLite. Supports full/incremental indexing and watch mode.",
-    inputSchema: {
-      root_path: z.string().describe("Root directory for markdown files"),
-      mode: z.enum(["full", "incremental"]).default("incremental"),
-      watch: z.boolean().default(false),
-    },
-  },
-  async ({ root_path, mode, watch }) => {
-    const result = await kb.indexKnowledgeBase({
-      rootPath: root_path,
-      mode,
-      watch,
-    });
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "kb_search",
-  {
-    description:
-      "Hybrid semantic + keyword search over markdown chunks. Ranking = alpha * vector + (1-alpha) * keyword.",
-    inputSchema: {
-      query: z.string().min(1),
-      top_k: z.number().int().min(1).max(50).default(8),
-      alpha: z.number().min(0).max(1).default(0.7),
-      path_prefix: z.string().optional(),
-      file_glob: z.string().optional(),
-    },
-  },
-  async ({ query, top_k, alpha, path_prefix, file_glob }) => {
-    const result = await kb.search({
-      query,
-      topK: top_k,
-      alpha,
-      pathPrefix: path_prefix,
-      fileGlob: file_glob,
-    });
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-server.registerTool(
-  "kb_get_document",
-  {
-    description:
-      "Read a markdown document by relative path. Returns whole file by default, or a line range if start/end are provided.",
-    inputSchema: {
-      rel_path: z.string().describe("Relative path to a markdown file"),
-      start_line: z.number().int().min(1).optional(),
-      end_line: z.number().int().min(1).optional(),
-    },
-  },
-  async ({ rel_path, start_line, end_line }) => {
-    const result = kb.getDocument({
-      relPath: rel_path,
-      startLine: start_line,
-      endLine: end_line,
-    });
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  },
-);
-
-async function main() {
+async function runStdio(): Promise<void> {
+  const server = createServerInstance();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  console.error(
+    `MCP server started (stdio). tools: ${config.toolPrefix}_index, ${config.toolPrefix}_search, ${config.toolPrefix}_get_document`,
+  );
+}
+
+async function runStreamableHttp(): Promise<void> {
+  const app = createMcpExpressApp({ host: config.httpHost });
+
+  app.post(config.httpPath, async (req, res) => {
+    const server = createServerInstance();
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      res.on("close", () => {
+        void transport.close();
+        void server.close();
+      });
+    } catch (error) {
+      console.error("Error handling MCP streamable HTTP request:", error);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32603,
+            message: "Internal server error",
+          },
+          id: null,
+        });
+      }
+      void server.close();
+    }
+  });
+
+  app.get(config.httpPath, (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed.",
+      },
+      id: null,
+    });
+  });
+
+  app.delete(config.httpPath, (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32000,
+        message: "Method not allowed.",
+      },
+      id: null,
+    });
+  });
+
+  app.listen(config.httpPort, config.httpHost, () => {
+    console.error(
+      `MCP server started (streamable-http): http://${config.httpHost}:${config.httpPort}${config.httpPath}`,
+    );
+    console.error(
+      `tools: ${config.toolPrefix}_index, ${config.toolPrefix}_search, ${config.toolPrefix}_get_document`,
+    );
+  });
+}
+
+async function main() {
+  if (config.transport === "streamable-http") {
+    await runStreamableHttp();
+    return;
+  }
+  await runStdio();
 }
 
 main().catch(async error => {

@@ -2,6 +2,13 @@
   "chromaUrl": "http://127.0.0.1:8000",
   "chromaCollection": "literag_markdown_kb",
   "sqlitePath": ".literag/kb.sqlite",
+  "knowledgeBaseDir": "./document",
+  "toolPrefix": "kb",
+  "serverName": "kb-markdown-kb",
+  "transport": "stdio",
+  "httpHost": "127.0.0.1",
+  "httpPort": 8787,
+  "httpPath": "/mcp",
   "defaultSearchAlpha": 0.7,
   "defaultTopK": 8,
   "chunking": {

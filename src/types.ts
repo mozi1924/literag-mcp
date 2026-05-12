@@ -9,6 +9,13 @@ export interface AppConfig {
   chromaUrl: string;
   chromaCollection: string;
   sqlitePath: string;
+  knowledgeBaseDir: string;
+  toolPrefix: string;
+  serverName: string;
+  transport: "stdio" | "streamable-http";
+  httpHost: string;
+  httpPort: number;
+  httpPath: string;
   defaultSearchAlpha: number;
   defaultTopK: number;
   chunking: ChunkingOptions;

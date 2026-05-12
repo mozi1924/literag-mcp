@@ -1,119 +1,103 @@
 # literag-mcp
 
-Markdown knowledge-base MCP server with:
+单知识库 Markdown MCP 服务器：
 
-- ChromaDB vector retrieval
-- SQLite FTS5 keyword/full-text retrieval
-- OpenAI-compatible external embeddings API
-- Hybrid ranking (`alpha * vector + (1 - alpha) * keyword`)
+- ChromaDB 向量检索
+- SQLite FTS5 关键词/全文检索
+- OpenAI-compatible 外置 Embedding API
+- 混合排序（`alpha * vector + (1 - alpha) * keyword`）
 
-## Features
+## 传输类型
 
-- `kb_index`: full/incremental indexing + optional watch mode
-- `kb_search`: hybrid semantic + keyword search with score breakdown
-- `kb_get_document`: fetch full markdown or specific line range
-- Markdown-aware chunking with fenced code block preservation and overlap
-- Result metadata includes relative path and line ranges
+本项目同时支持两种 MCP 传输：
 
-## Setup
+- `stdio`
+- `streamable-http`
 
-1. Install dependencies:
+通过 `MCP_TRANSPORT` 选择：
 
-```bash
-npm install
-```
+- `MCP_TRANSPORT=stdio`
+- `MCP_TRANSPORT=streamable-http`
 
-2. Configure embedding + storage via environment variables or `config.json`.
+## 单知识库默认目录
 
-You can copy the example:
+默认知识库目录是 MCP 服务器工作目录下的 `document/`（含子目录）。
 
-```bash
-cp config.example.json config.json
-```
+- 无需每次传文档根目录
+- 在远程 MCP 场景或外部目录权限受限时，依旧可用
 
-3. Build and run:
+可通过 `KB_DOCUMENT_ROOT`（或 `config.json` 的 `knowledgeBaseDir`）覆盖。
 
-```bash
-npm run build
-npm start
-```
+## 工具名前缀
 
-Or development mode:
+工具名前缀支持自定义，例如设置：
 
-```bash
-npm run dev
-```
+- `KB_TOOL_PREFIX=bpy`
 
-## Configuration
+工具会注册为：
 
-Environment variables take precedence over `config.json`.
+- `bpy_index`
+- `bpy_search`
+- `bpy_get_document`
 
-Required (embedding):
+默认前缀是 `kb`。
+
+## 工具
+
+- `<prefix>_index`
+  - 入参：`mode`, `watch`, `root_path?`
+  - `root_path` 可选，默认使用 `document/`
+- `<prefix>_search`
+  - 入参：`query`, `top_k`, `alpha`, `path_prefix?`, `file_glob?`
+- `<prefix>_get_document`
+  - 入参：`rel_path`, `start_line?`, `end_line?`
+
+## 配置优先级
+
+环境变量优先于 `config.json`。
+
+### 必需（Embedding）
 
 - `EMBEDDING_BASE_URL`
 - `EMBEDDING_API_KEY`
 - `EMBEDDING_MODEL`
 
-Optional:
+### 常用可选
 
-- `EMBEDDING_DIMENSIONS`
-- `CHROMA_URL` (default `http://127.0.0.1:8000`)
-- `CHROMA_COLLECTION` (default `literag_markdown_kb`)
-- `SQLITE_PATH` (default `.literag/kb.sqlite`)
-- `SEARCH_ALPHA` (default `0.7`)
-- `SEARCH_TOP_K` (default `8`)
-- `CHUNK_TARGET_TOKENS` (default `1000`)
-- `CHUNK_OVERLAP_TOKENS` (default `120`)
+- `KB_DOCUMENT_ROOT`（默认 `./document`）
+- `KB_TOOL_PREFIX`（默认 `kb`）
+- `MCP_TRANSPORT`（`stdio` / `streamable-http`）
+- `MCP_HTTP_HOST`（默认 `127.0.0.1`）
+- `MCP_HTTP_PORT`（默认 `8787`）
+- `MCP_HTTP_PATH`（默认 `/mcp`）
+- `CHROMA_URL`（默认 `http://127.0.0.1:8000`）
+- `CHROMA_COLLECTION`（默认 `literag_markdown_kb`）
+- `SQLITE_PATH`（默认 `.literag/kb.sqlite`）
 
-## MCP Tools
+## 运行
 
-### `kb_index`
+安装依赖：
 
-Input:
-
-```json
-{
-  "root_path": "/absolute/path/to/docs",
-  "mode": "full",
-  "watch": false
-}
+```bash
+npm install
 ```
 
-### `kb_search`
+开发：
 
-Input:
-
-```json
-{
-  "query": "how to install",
-  "top_k": 8,
-  "alpha": 0.7,
-  "path_prefix": "docs/",
-  "file_glob": "**/*.md"
-}
+```bash
+npm run dev:stdio
+npm run dev:http
 ```
 
-### `kb_get_document`
+构建与运行：
 
-Input (full):
-
-```json
-{
-  "rel_path": "docs/setup.md"
-}
+```bash
+npm run build
+npm run start:stdio
+npm run start:http
 ```
 
-Input (line range):
-
-```json
-{
-  "rel_path": "docs/setup.md",
-  "start_line": 10,
-  "end_line": 60
-}
-```
-
-## Tests
+测试：
 
 ```bash
 npm test

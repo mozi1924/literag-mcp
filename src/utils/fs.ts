@@ -11,6 +11,11 @@ export function toPosixRelative(rootPath: string, absPath: string): string {
 export async function collectMarkdownFiles(rootPath: string): Promise<string[]> {
   const out: string[] = [];
 
+  const stat = await fs.stat(rootPath).catch(() => null);
+  if (!stat || !stat.isDirectory()) {
+    return out;
+  }
+
   async function walk(current: string): Promise<void> {
     const entries = await fs.readdir(current, { withFileTypes: true });
     for (const entry of entries) {

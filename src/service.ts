@@ -21,6 +21,8 @@ export class KnowledgeBaseService {
   private readonly retriever: HybridRetriever;
   private watchState: WatchState | null = null;
   private queue: Promise<void> = Promise.resolve();
+  private indexedOnce = false;
+  private initialIndexPromise: Promise<void> | null = null;
 
   constructor(cwd = process.cwd()) {
     this.config = loadConfig(cwd);
@@ -43,6 +45,10 @@ export class KnowledgeBaseService {
     this.retriever = new HybridRetriever(embeddingProvider, vectorStore, this.sqlite);
   }
 
+  getConfig(): AppConfig {
+    return this.config;
+  }
+
   async close(): Promise<void> {
     if (this.watchState) {
       await this.watchState.watcher.close();
@@ -52,21 +58,22 @@ export class KnowledgeBaseService {
   }
 
   async indexKnowledgeBase(args: {
-    rootPath: string;
     mode: IndexMode;
     watch: boolean;
+    rootPath?: string;
   }): Promise<IndexStats> {
-    const rootPath = path.resolve(args.rootPath);
+    const rootPath = path.resolve(args.rootPath ?? this.config.knowledgeBaseDir);
     const stats = await this.indexer.run(rootPath, args.mode);
 
     if (args.watch) {
       await this.startWatch(rootPath);
       stats.watchStarted = true;
     } else {
-      await this.stopWatch(rootPath);
+      await this.stopWatch();
       stats.watchStarted = false;
     }
 
+    this.indexedOnce = true;
     return stats;
   }
 
@@ -77,6 +84,8 @@ export class KnowledgeBaseService {
     pathPrefix?: string;
     fileGlob?: string;
   }): Promise<SearchResponse> {
+    await this.ensureIndexed();
+
     const topK = clamp(Math.floor(args.topK ?? this.config.defaultTopK), 1, 50);
     const alpha = clamp(args.alpha ?? this.config.defaultSearchAlpha, 0, 1);
 
@@ -89,11 +98,11 @@ export class KnowledgeBaseService {
     });
   }
 
-  getDocument(args: {
+  async getDocument(args: {
     relPath: string;
     startLine?: number;
     endLine?: number;
-  }): {
+  }): Promise<{
     rel_path: string;
     abs_path: string;
     total_lines: number;
@@ -101,7 +110,9 @@ export class KnowledgeBaseService {
     start_line: number;
     end_line: number;
     content: string;
-  } {
+  }> {
+    await this.ensureIndexed();
+
     const record = this.sqlite.getDocument(args.relPath);
     if (!record) {
       throw new Error(`Document not found: ${args.relPath}`);
@@ -124,6 +135,24 @@ export class KnowledgeBaseService {
       end_line: endLine,
       content: lines.slice(startLine - 1, endLine).join("\n"),
     };
+  }
+
+  private async ensureIndexed(): Promise<void> {
+    if (this.indexedOnce) {
+      return;
+    }
+    if (!this.initialIndexPromise) {
+      this.initialIndexPromise = this.indexer
+        .run(this.config.knowledgeBaseDir, "incremental")
+        .then(() => {
+          this.indexedOnce = true;
+        })
+        .catch(error => {
+          this.initialIndexPromise = null;
+          throw error;
+        });
+    }
+    await this.initialIndexPromise;
   }
 
   private async startWatch(rootPath: string): Promise<void> {
@@ -175,7 +204,7 @@ export class KnowledgeBaseService {
     };
   }
 
-  private async stopWatch(_rootPath: string): Promise<void> {
+  private async stopWatch(): Promise<void> {
     if (!this.watchState) {
       return;
     }
